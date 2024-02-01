@@ -1,9 +1,9 @@
-let aNaturalMinorScale = ['A2', 'B2', 'C3', 'D3', 'E3', 'F3', 'G3', 'A3', 'B3', 'C4', 'D4', 'E4', 'F4', 'G4', 'A4'];
-let aDorianScale = ['A2', 'B2', 'C3', 'D3', 'E3', 'F#3', 'G3', 'A3', 'B3', 'C4', 'D4', 'E4', 'F#4', 'G4', 'A4'];
-let aAeolianScale = ['A2', 'B2', 'C3', 'D3', 'E3', 'F3', 'G3', 'A3', 'B3', 'C4', 'D4', 'E4', 'F4', 'G4', 'A4'];
-let aPhrygianScale = ['A2', 'Bb2', 'C3', 'D3', 'E3', 'F3', 'G3', 'A3', 'Bb3', 'C4', 'D4', 'E4', 'F4', 'G4', 'A4'];
-let aMelodicMinorScale = ['A2', 'B2', 'C3', 'D3', 'E3', 'F#3', 'G#3', 'A3', 'B3', 'C4', 'D4', 'E4', 'F#4', 'G#4', 'A4'];
-
+let aNaturalMinorScale = ['A4', 'B4', 'C5', 'D5', 'E5', 'F5', 'G5', 'A5', 'B5', 'C6', 'D6', 'E6', 'F6', 'G6', 'A6'];
+let aDorianScale = ['A4', 'B4', 'C5', 'D5', 'E5', 'F#5', 'G5', 'A5', 'B5', 'C6', 'D6', 'E6', 'F#6', 'G6', 'A6'];
+let aAeolianScale = ['A4', 'B4', 'C5', 'D5', 'E5', 'F5', 'G5', 'A5', 'B5', 'C6', 'D6', 'E6', 'F6', 'G6', 'A6'];
+let aPhrygianScale = ['A4', 'Bb4', 'C5', 'D5', 'E5', 'F5', 'G5', 'A5', 'Bb5', 'C6', 'D6', 'E6', 'F6', 'G6', 'A6'];
+let aMelodicMinorScale = ['A4', 'B4', 'C5', 'D5', 'E5', 'F#5', 'G#5', 'A5', 'B5', 'C6', 'D6', 'E6', 'F#6', 'G#6', 'A6'];
+let aPentatonicMinorScale = ['A4', 'C5', 'D5', 'E5', 'G5', 'A5', 'C6', 'D6', 'E6', 'G6', 'A6'];
 
 let brighter = [
 	[23, 230, 226],
@@ -18,24 +18,25 @@ function videoLoaded() {
 	state.canvas = createCanvas(640, 480);
 }
 
-
 let state;
-function setup() {
+function preload() {
 	state = {
 		// config items:
 		mode: "webcam", // swap between "development" and "webcam"
+		// mode: "development", // swap between "development" and "webcam"
 		step: 8, // how many times per minute we should check for notes.
 		scale: aNaturalMinorScale,
-		threshold: 185, // lower means more notes per second. 3.28 is a good semi-continuous song, with occasional moments of silence.
+		threshold: 25, // lower means more notes
 		maxThreshold: 200,
-		noteLengths: ["4n", "2n"],
+		noteLengths: ["16n"],
 		colors: brighter,
-		maxSynths: 3,
+		maxSynths: 8,
 		// dont change anything below this point.
 		canvas: undefined,
 		scaleSelect: undefined, // only defined in development mode.
 		thresholdSlider: undefined, // only defined when in development mode.
 		media: undefined,
+		player: undefined,
 		points: [],
 		synthIndex: 0,
 		audioRunning: false,
@@ -43,6 +44,12 @@ function setup() {
 		imgY: 0,
 		imgScale: 1.0,
 	}
+
+	state.player = new Tone.Player("/abl.mp3").toDestination();
+	state.player.loop = true;
+	state.player.autostart = true;
+	state.player.volume = -20;
+
 
 
 	if (state.mode == "webcam") {
@@ -52,10 +59,11 @@ function setup() {
 	}
 	else if (state.mode == "development") {
 		// dev mode adds a slider for threshold and uses a video file, rather than the webcam.
-		state.thresholdSlider = createSlider(0, state.maxThreshold, state.threshold, 0);
+		state.thresholdSlider = createSlider(0, 255, state.threshold, 0);
 		state.scaleSelect = createSelect();
 
 		state.scaleSelect.option('aNaturalMinorScale');
+		state.scaleSelect.option('aPentatonicMinorScale');
 		state.scaleSelect.option('aDorianScale');
 		state.scaleSelect.option('aAeolianScale');
 		state.scaleSelect.option('aPhrygianScale');
@@ -68,8 +76,11 @@ function setup() {
 		console.log("mode not supported.")
 	}
 
-
 	Tone.context.blockSize = 1024;
+}
+
+
+function setup() {
 }
 
 function displayMedia(img) {
@@ -107,14 +118,18 @@ function draw() {
 	drawAndCheckPoints();
 }
 
+let initialized = false;
 function mouseClicked() {
-	initializePoints();
-	if (state.mode == "development") {
-		state.media.loop();
-		state.media.volume(0);
+	if (!initialized) {
+		initializePoints();
+		if (state.mode == "development") {
+			state.media.loop();
+			state.media.volume(0);
+		}
+		state.audioRunning = true;
+		Tone.start();
+		initialized = true;
 	}
-	state.audioRunning = true;
-	Tone.start();
 }
 
 function generateCircleCoordinates(N, radius) {
@@ -131,13 +146,22 @@ function generateCircleCoordinates(N, radius) {
 function initializePoints() {
 	let circCoords = generateCircleCoordinates(state.maxSynths, 60)
 	circCoords.forEach((coord) => {
-		//const chorus = new Tone.Chorus(4, 2.5, 0.5).toDestination();
-		const phaser = new Tone.Phaser({
-			frequency: 3,
-			octaves: 3,
-			baseFrequency: 1000
-		}).toDestination();
-		const synth = new Tone.PolySynth().connect(phaser);
+
+		// plain synth
+		//const synth = new Tone.PolySynth().toDestination();
+
+		// phaser synth
+		//const phaser = new Tone.Phaser({
+		// frequency: 3,
+		// octaves: 3,
+		// baseFrequency: 1000
+		//}).toDestination();
+		//const synth = new Tone.PolySynth().connect(phaser);
+
+		// chorus synth
+		const chorus = new Tone.Chorus(4, 2.5, 0.5).toDestination();
+		const reverb = new Tone.Reverb(.25).connect(chorus);
+		const synth = new Tone.PolySynth().connect(reverb);
 		state.points.push(
 			{
 				x: coord.x + width / 2,
@@ -172,18 +196,17 @@ function euclideanDistance(colors, pastColors) {
 
 function drawAndCheckPoints() {
 	let now = Tone.now();
-	if (timeToRun(now)) {
-		state.points.forEach((point) => {
-			point.pastColors = point.colors;
-			point.colors = get(point.x, point.y);
-
-			checkDistanceAndTriggerNote(point, now);
-		});
-	}
-	// drawing the point must happen after sampling the video color (otherwise we just get the color of the point.)
 	state.points.forEach((point) => {
+		point.pastColors = point.colors;
+		point.colors = get(point.x, point.y);
+
+		checkDistanceAndTriggerNote(point, now);
 		drawPoint(point);
 	});
+	// drawing the point must happen after sampling the video color (otherwise we just get the color of the point.)
+	//	state.points.forEach((point) => {
+	//		drawPoint(point);
+	//	});
 }
 
 function checkDistanceAndTriggerNote(point, now) {
@@ -236,7 +259,6 @@ function timeToRun(time) {
 	const checkInterval = 1 / state.step;
 	if ((time - lastChecked) >= checkInterval) {
 		lastChecked = time;
-		console.log("timeToRun");
 		return true;
 	}
 	else { return false; }
